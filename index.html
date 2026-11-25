@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#120a1e">
-<title>معركة الهياكل - لعبة قتال 3D</title>
+<title>معركة الهياكل - الملحمة</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:none}
 html,body{margin:0;height:100%;background:#0d0716;overflow:hidden;font-family:system-ui,"Segoe UI",Tahoma,"Noto Sans Arabic",Arial,sans-serif;color:#fff}
@@ -67,14 +67,16 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
 <div class="screen" id="menu" style="display:flex">
   <div style="font-size:54px;line-height:1">⚔</div>
   <h1>معركة الهياكل</h1>
-  <p>أنت الفارس الأخير. اقتل جيش الهياكل في ٥ موجات واهزم ملكهم في الأخيرة. اضرب في الوقت المناسب، وتفادى ضرباتهم.</p>
+  <p>أنت الفارس الأخير. اقتل جيش الهياكل في ١٠ موجات (رماة وأبطال وزعيم) واهزم ملكهم. بعدها كمّل في وضع لانهائي واكسب أرواح لتطوير دائم. اضرب في الوقت المناسب، وتفادى ضرباتهم.</p>
   <p style="font-size:13px;opacity:.75">يسار: عصا الحركة · زر الضرب الأحمر (٣ ضربات متتالية) · الأزرق للتفادي (بيحميك لحظة) · البنفسجي ضربة دوّارة قوية<br>كيبورد: WASD أو الأسهم · J ضرب · K تفادي · L دوّامة</p>
   <button class="btn" id="bStart" disabled>جاري التحميل…</button>
+  <button class="btn alt" id="bTemple">💀 معبد الأرواح</button>
   <div id="best" style="font-size:14px;opacity:.85"></div>
   <div id="credit">مجسمات ثلاثية الأبعاد: Kay Lousberg (KayKit) - CC0 · المحرك: three.js (MIT) · الصوت مولّد بالكود</div>
 </div>
 <div class="screen" id="upg"><h1 style="font-size:30px">اختار تطوير</h1><div id="cards"></div></div>
-<div class="screen" id="over"><h1 id="otitle"></h1><p id="otext"></p><button class="btn" id="bRetry">العب تاني</button><button class="btn alt" id="bShare" style="display:none">شارك نتيجتك</button></div>
+<div class="screen" id="over"><h1 id="otitle"></h1><p id="otext"></p><button class="btn" id="bRetry">العب تاني</button><button class="btn alt" id="bShare" style="display:none">شارك نتيجتك</button><button class="btn alt" id="bEndless" style="display:none">♾ كمّل لانهائي</button></div>
+<div class="screen" id="temple"><h1 style="font-size:30px">💀 معبد الأرواح</h1><p id="soulline"></p><div id="tcards"></div><button class="btn alt" id="bTBack">رجوع</button></div>
 <div class="screen" id="pause"><h1>إيقاف مؤقت</h1><button class="btn" id="bResume">كمّل</button><button class="btn alt" id="bQuit">القائمة</button></div>
 <div id="fps"></div>
 
@@ -130,6 +132,10 @@ for(let i=0;i<10;i++){
   const top=new THREE.Mesh(new THREE.BoxGeometry(1.5,.4,1.5),stoneMat);top.position.set(x,3.7+(i%3)*.5,z);scene.add(top);
   const f=new THREE.Mesh(new THREE.ConeGeometry(.35,.9,6),flameMat);f.position.set(x,4.4+(i%3)*.5,z);scene.add(f);flames.push(f);
 }
+const EMB=300,embPos=new Float32Array(EMB*3);for(let i=0;i<EMB;i++){const a=Math.random()*6.28,r=Math.random()*R;embPos[i*3]=Math.cos(a)*r;embPos[i*3+1]=Math.random()*9;embPos[i*3+2]=Math.sin(a)*r}
+const embGeo=new THREE.BufferGeometry();embGeo.setAttribute('position',new THREE.BufferAttribute(embPos,3));
+const embers=new THREE.Points(embGeo,new THREE.PointsMaterial({color:0xff9a40,size:.14,transparent:true,opacity:.8,depthWrite:false}));embers.frustumCulled=false;scene.add(embers);
+function updEmbers(dt){for(let i=0;i<EMB;i++){let y=embPos[i*3+1]+dt*(.6+(i%5)*.25);embPos[i*3]+=Math.sin(performance.now()/900+i)*dt*.3;if(y>9){y=0}embPos[i*3+1]=y}embGeo.attributes.position.needsUpdate=true}
 const rockGeo=new THREE.DodecahedronGeometry(.7,0);
 for(let i=0;i<14;i++){const a=Math.random()*6.28,r=4+Math.random()*(R-5);const m=new THREE.Mesh(rockGeo,stoneMat);m.position.set(Math.cos(a)*r,.2,Math.sin(a)*r);m.scale.set(.5+Math.random()*.7,.3+Math.random()*.4,.5+Math.random()*.7);m.rotation.y=Math.random()*6;scene.add(m)}
 // blob shadow
@@ -212,7 +218,7 @@ function setColor(e,hex){for(const m of e.mats)if(m.color)m.color.multiply(new T
 // ---------- state ----------
 const keys={};
 const input={mx:0,mz:0,atk:false,dodge:false,spec:false};
-const game={mode:'menu',paused:false,wave:0,kills:0,time:0,hitstop:0,shake:0,timeScale:1,player:null,enemies:[],fx:[],dmgs:[],upg:{dmg:1,hp:0,spd:1},waveDelay:0,spawnQueue:[],bossRef:null,totalWaves:5,t0:0};
+const game={mode:'menu',paused:false,wave:0,kills:0,time:0,hitstop:0,shake:0,timeScale:1,player:null,enemies:[],fx:[],dmgs:[],upg:{dmg:1,hp:0,spd:1},waveDelay:0,spawnQueue:[],bossRef:null,totalWaves:10,t0:0};
 window.__g=game;
 const rings=[];
 const P={speed:6.2};
@@ -226,12 +232,15 @@ function mkPlayer(){
 const KIND={
  minion:{hp:40,spd:3.3,dmg:12,range:1.9,wind:.5,anim:'1H_Melee_Attack_Chop',cd:1.2,scale:1,color:null,sh:1.2},
  warrior:{hp:100,spd:3.7,dmg:22,range:2.2,wind:.6,anim:'1H_Melee_Attack_Slice_Diagonal',cd:1.3,scale:1.12,color:0xffc0a0,sh:1.4,tint:[.25,0,0]},
- boss:{hp:700,spd:3.2,dmg:32,range:3.4,wind:.9,anim:'2H_Melee_Attack_Chop',cd:2.1,scale:1.9,color:0xff8a7a,sh:3,tint:[.12,0,.04]}
+ archer:{hp:55,spd:3.1,dmg:10,range:10,wind:.75,anim:'1H_Melee_Attack_Chop',cd:2.2,scale:1.02,color:0xa0d0ff,sh:1.2,tint:[0,.08,.2]},
+ champion:{hp:420,spd:3.4,dmg:30,range:2.8,wind:.75,anim:'2H_Melee_Attack_Chop',cd:1.6,scale:1.55,color:0xffa06a,sh:2.2,tint:[.2,.05,0]},
+ boss:{hp:1200,spd:3.2,dmg:32,range:3.4,wind:.9,anim:'2H_Melee_Attack_Chop',cd:2.1,scale:1.9,color:0xff8a7a,sh:3,tint:[.12,0,.04]}
 };
+function hpScale(kind){return kind==='boss'?1:(1+Math.max(0,game.wave-4)*.1)}
 function spawnEnemy(kind,x,z){
   const K=KIND[kind];
-  const c=buildChar(kind==='minion'?'minion':'warrior');
-  const e=Object.assign(c,{kind,K,x,z,vx:0,vz:0,face:0,hp:K.hp,maxhp:K.hp,state:'spawn',st:0,cd:1+Math.random(),hitDone:false,flash:0,dead:false,shield:blob(K.sh),r:.55*K.scale,stun:0,phase:1,atkN:0});
+  const c=buildChar(kind==='minion'||kind==='archer'?'minion':'warrior');
+  const e=Object.assign(c,{kind,K,x,z,vx:0,vz:0,face:0,hp:Math.round(K.hp*hpScale(kind)),maxhp:Math.round(K.hp*hpScale(kind)),state:'spawn',st:0,cd:1+Math.random(),hitDone:false,flash:0,dead:false,shield:blob(K.sh),r:.55*K.scale,stun:0,phase:1,atkN:0});
   c.group.scale.setScalar(K.scale);
   if(K.color)setColor(c,K.color);
   if(K.tint)c._tint=K.tint;
@@ -246,6 +255,7 @@ function removeEnemy(e){scene.remove(e.group);scene.remove(e.shield);e.hpbar.rem
 // ---------- fx ----------
 const sparkGeo=new THREE.BoxGeometry(.14,.14,.14);
 const sparkMat=new THREE.MeshBasicMaterial({color:0xffd870});
+const boneMat=new THREE.MeshBasicMaterial({color:0xeee8d0});
 const sparkMatR=new THREE.MeshBasicMaterial({color:0xff4040});
 const sparks=[];
 function burst(x,y,z,n,mat){
@@ -278,7 +288,7 @@ const ang=(dx,dz)=>Math.atan2(dx,dz);
 function angDiff(a,b){let d=a-b;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;return d}
 function hurtEnemy(e,dmg,kx,kz,crit){
   if(e.dead||e.state==='spawn')return;
-  e.hp-=dmg;e.flash=.12;
+  e.hp-=dmg;e.flash=.12;if(game.upg.ls&&game.player&&!game.player.dead)game.player.hp=Math.min(game.player.maxhp,game.player.hp+dmg*game.upg.ls);
   floatText(e.x,2.4*e.K.scale*.7,e.z,Math.round(dmg),crit?'#ffd84a':'#fff');
   burst(e.x,1.2,e.z,crit?12:7,sparkMat);
   game.hitstop=crit?.09:.05;game.shake=Math.max(game.shake,crit?.35:.18);
@@ -288,14 +298,15 @@ function hurtEnemy(e,dmg,kx,kz,crit){
   if(e.hp<=0){
     e.dead=true;e.state='dying';e.st=0;game.kills++;
     play(e,e.kind==='boss'?'Death_C_Skeletons':(Math.random()<.5?'Death_A':'Death_C_Skeletons'),{loop:false,fade:.05});
-    SFX.die();burst(e.x,1,e.z,16,sparkMatR);
+    SFX.die();burst(e.x,1,e.z,16,sparkMatR);burst(e.x,1.4,e.z,10,boneMat);
+    game.combo=(game.combo||0)+1;game.comboT=2.6;if(game.combo>0&&game.combo%5===0){const pp=game.player;if(pp&&!pp.dead)pp.hp=Math.min(pp.maxhp,pp.hp+4);banner('🔥 كومبو x'+game.combo,900);addRing(e.x,e.z,2.4,.35,0xffa030)}
     if(e.kind==='boss'){game.shake=.8;game.hitstop=.25;}
   }
 }
 function hurtPlayer(dmg,fromx,fromz){
   const p=game.player;if(p.dead||p.inv>0||game.mode!=='play')return false;
   if(p.shieldHits>0){p.shieldHits--;return false}
-  p.hp-=dmg;p.inv=.5;p.flash=.15;
+  try{navigator.vibrate&&navigator.vibrate(90)}catch(e){}game.combo=0;p.hp-=dmg;p.inv=.5;p.flash=.15;
   floatText(p.x,2.2,p.z,Math.round(dmg),'#ff6a6a');
   burst(p.x,1.2,p.z,8,sparkMatR);game.shake=Math.max(game.shake,.4);game.hitstop=.06;
   SFX.hurt();$('flash').style.opacity=1;setTimeout(()=>$('flash').style.opacity=0,120);
@@ -317,6 +328,7 @@ function startAttack(p){
   SFX.swing();
 }
 function playerHitCheck(p,radius,arc,mult,knock,crit){
+  radius*=game.upg.rad||1;
   let hit=false;
   for(const e of game.enemies){
     if(e.dead||e.state==='spawn')continue;
@@ -324,21 +336,21 @@ function playerHitCheck(p,radius,arc,mult,knock,crit){
     if(d>radius+e.r)continue;
     if(arc<Math.PI*1.9&&Math.abs(angDiff(ang(dx,dz),p.face))>arc)continue;
     const dmg=(20+Math.random()*6)*game.upg.dmg*mult;
-    hurtEnemy(e,dmg,dx/(d||1)*knock,dz/(d||1)*knock,crit);hit=true;
+    const rc=Math.random()<(game.upg.crit||0);hurtEnemy(e,rc?dmg*2:dmg,dx/(d||1)*knock,dz/(d||1)*knock,crit||rc);hit=true;
   }
   return hit;
 }
 function updatePlayer(dt){
   const p=game.player;if(!p)return;
   p.dodgeCd=Math.max(0,p.dodgeCd-dt);p.specCd=Math.max(0,p.specCd-dt);p.inv=Math.max(0,p.inv-dt);p.flash=Math.max(0,(p.flash||0)-dt);
-  p.st+=dt;
+  p.st+=dt;if(game.upg.rg&&!p.dead&&game.mode==="play")p.hp=Math.min(p.maxhp,p.hp+game.upg.rg*dt);
   let mx=input.mx,mz=input.mz;const ml=Math.hypot(mx,mz);if(ml>1){mx/=ml;mz/=ml}
   const moving=ml>.15;
   const spd=P.speed*game.upg.spd;
   if(!p.dead){
     if(p.state==='idle'||p.state==='run'){
       if(input.dodge&&p.dodgeCd<=0){startDodge(p,mx,mz,moving);input.dodge=false}
-      else if(input.spec&&p.specCd<=0){p.state='spin';p.st=0;p.hitDone=false;p.specCd=6;play(p,'2H_Melee_Attack_Spin',{loop:false,fade:.08,speed:1.5});p.spinDur=clips['2H_Melee_Attack_Spin'].duration/1.5;SFX.swing();input.spec=false}
+      else if(input.spec&&p.specCd<=0){p.state='spin';p.st=0;p.hitDone=false;p.specCd=6*(game.upg.sc||1);play(p,'2H_Melee_Attack_Spin',{loop:false,fade:.08,speed:1.5});p.spinDur=clips['2H_Melee_Attack_Spin'].duration/1.5;SFX.swing();input.spec=false}
       else if(input.atk){input.atk=false;startAttack(p)}
       else{
         if(moving){p.vx+=(mx*spd-p.vx)*Math.min(1,dt*14);p.vz+=(mz*spd-p.vz)*Math.min(1,dt*14);p.face=ang(mx,mz);if(p.state!=='run'){p.state='run';play(p,'Running_A',{fade:.12,speed:1.15})}}
@@ -379,7 +391,7 @@ function updatePlayer(dt){
 function startDodge(p,mx,mz,moving){
   let dx=mx,dz=mz;if(!moving){dx=Math.sin(p.face);dz=Math.cos(p.face)}
   const l=Math.hypot(dx,dz)||1;p.dodgeDir=[dx/l,dz/l];p.face=ang(dx,dz);
-  p.state='dodge';p.st=0;p.inv=.45;p.dodgeCd=.9;p.queued=false;
+  p.state='dodge';p.st=0;p.inv=.45;p.dodgeCd=.9*(game.upg.dc||1);p.queued=false;
   play(p,'Dodge_Forward',{loop:false,fade:.05,speed:2});SFX.dodge();
 }
 
@@ -410,6 +422,7 @@ function updateEnemies(dt){
           if(sp===0&&e.curName!=='Idle_Combat')play(e,'Idle_Combat',{fade:.15});
         }else{
           e.vx*=.8;e.vz*=.8;
+          if(e.kind==='archer'&&dist<5){e.vx+=(-dx/dist*K.spd-e.vx)*Math.min(1,dt*6);e.vz+=(-dz/dist*K.spd-e.vz)*Math.min(1,dt*6)}
           if(e.curName!=='Idle_Combat')play(e,'Idle_Combat',{fade:.12});
         }
         if(e.kind==='boss')bossBrain(e,dist,dx,dz);
@@ -427,7 +440,7 @@ function updateEnemies(dt){
       if(!e.hitDone&&e.st>=K.wind){
         e.hitDone=true;
         const dd=Math.hypot(p.x-e.x,p.z-e.z);
-        if(dd<K.range+.6&&Math.abs(angDiff(ang(p.x-e.x,p.z-e.z),e.face))<1.1)hurtPlayer(K.dmg,e.x,e.z);
+        if(e.kind==='archer')shootArrow(e);else if(dd<K.range+.6&&Math.abs(angDiff(ang(p.x-e.x,p.z-e.z),e.face))<1.1)hurtPlayer(K.dmg,e.x,e.z);
         burst(e.x+Math.sin(e.face)*1.4,1,e.z+Math.cos(e.face)*1.4,4,sparkMat);
         e.vx=Math.sin(e.face)*3;e.vz=Math.cos(e.face)*3;
       }
@@ -493,25 +506,38 @@ function bossAtk(e,dt,dist,dx,dz){
   if(e.st>=1.6){e.state='chase';e.st=0;e.cd=e.phase===2?.8:1.6;e.tele=false;play(e,'Running_A',{fade:.15,speed:.9})}
 }
 
+// ---------- arrows ----------
+const projs=[];const arrowGeo=new THREE.CylinderGeometry(.07,.07,1,5);arrowGeo.rotateX(Math.PI/2);const arrowMat=new THREE.MeshBasicMaterial({color:0xffe08a});
+function shootArrow(e){const p=game.player;const a=ang(p.x-e.x,p.z-e.z);const m=new THREE.Mesh(arrowGeo,arrowMat);m.position.set(e.x+Math.sin(a)*1,1.3,e.z+Math.cos(a)*1);m.rotation.y=a;scene.add(m);projs.push({m,vx:Math.sin(a)*12,vz:Math.cos(a)*12,t:0});burst(m.position.x,1.3,m.position.z,3,sparkMat)}
+function updProjs(dt){const p=game.player;for(let i=projs.length-1;i>=0;i--){const q=projs[i];q.t+=dt;q.m.position.x+=q.vx*dt;q.m.position.z+=q.vz*dt;let dead=q.t>2.4||Math.hypot(q.m.position.x,q.m.position.z)>R+1;
+  if(!dead&&p&&!p.dead&&Math.hypot(p.x-q.m.position.x,p.z-q.m.position.z)<.85&&p.inv<=0){hurtPlayer(9+game.wave*.8,q.m.position.x-q.vx,q.m.position.z-q.vz);dead=true}
+  if(dead){scene.remove(q.m);projs.splice(i,1)}}}
 // ---------- waves ----------
 const WAVES=[
  [['minion',3]],
  [['minion',4],['warrior',1]],
  [['minion',3],['warrior',3]],
- [['minion',6],['warrior',4]],
+ [['minion',4],['archer',2],['warrior',2]],
+ [['champion',1],['minion',4]],
+ [['archer',3],['warrior',3],['minion',4]],
+ [['warrior',5],['archer',3],['minion',4]],
+ [['champion',2],['archer',3]],
+ [['minion',7],['warrior',5],['archer',4]],
  [['boss',1]]
 ];
+function genWave(n){const k=n-10;return [['minion',4+(k%4)],['warrior',3+Math.floor(k/2)],['archer',2+Math.floor(k/3)],['champion',(k%3===0?1:0)+Math.floor(k/8)]].filter(a=>a[1]>0)}
 function banner(t,ms){const b=$('banner');b.textContent=t;b.style.opacity=1;clearTimeout(b._t);b._t=setTimeout(()=>b.style.opacity=0,ms||1800)}
 function spawnPos(i){const a=Math.random()*6.28;let r=R-3;return [Math.cos(a)*r,Math.sin(a)*r]}
 function startWave(n){
   game.wave=n;game.mode='play';
-  $('wave').textContent=`الموجة ${n} / ${game.totalWaves}`;
-  const defs=WAVES[n-1];
+  $('wave').textContent=`الموجة ${n} / ${game.endless?'∞':game.totalWaves}`;
+  const defs=n<=10?WAVES[n-1]:genWave(n);
+  {const pal=[0x120a1e,0x161026,0x1c0c26,0x240c22,0x2c0c1c,0x300c14,0x340c0c,0x380a08,0x3c0806,0x400404];const pc=pal[Math.min(n-1,9)];scene.fog.color.setHex(pc);renderer.setClearColor(pc);fire.color.setHex(n>=8?0xff4020:0xff8a30)}
   let delay=0;
   for(const [k,c] of defs)for(let i=0;i<c;i++){game.spawnQueue.push({k,t:delay});delay+=k==='boss'?0:.5}
   intensity=n>=5?2:(n>=3?1:0);
-  banner(n===5?'معركة الزعيم':`الموجة ${n}`,1800);
-  if(n===5)SFX.roar();
+  banner(n===game.totalWaves?'معركة الزعيم':(n===5||n===8)?'⚠ بطل الهياكل':`الموجة ${n}`,1800);
+  if(n===game.totalWaves||n===5||n===8)SFX.roar();
 }
 function updSpawns(dt){
   for(let i=game.spawnQueue.length-1;i>=0;i--){const s=game.spawnQueue[i];s.t-=dt;if(s.t<=0){game.spawnQueue.splice(i,1);
@@ -519,7 +545,7 @@ function updSpawns(dt){
     for(let tries=0;tries<8;tries++){[x,z]=spawnPos();if(Math.hypot(x-pp.x,z-pp.z)>7)break}
     if(s.k==='boss'){x=0;z=-8}
     const e=spawnEnemy(s.k,x,z);burst(x,.3,z,8,sparkMatR);
-    if(s.k==='boss'){game.bossRef=e;$('boss').style.display='block';$('bosslabel').style.display='block'}
+    if(s.k==='boss'||s.k==='champion'){game.bossRef=e;$('boss').style.display='block';$('bosslabel').style.display='block';$('bosslabel').textContent=s.k==='boss'?'ملك الهياكل':'بطل الهياكل'}
   }}
 }
 function checkWaveDone(dt){
@@ -536,6 +562,14 @@ const UPGS=[
  {t:'درع سحري',d:'بيمتص ضربتين',f:()=>{game.player.shieldHits=2}},
  {t:'إكسير الحياة',d:'يشفي 60% من الصحة',f:()=>{const p=game.player;p.hp=Math.min(p.maxhp,p.hp+p.maxhp*.6)}}
 ];
+UPGS.push(
+ {t:'مصّاص الدماء',d:'بتشفى 6% من الضرر اللي بتعمله',f:()=>{game.upg.ls=(game.upg.ls||0)+.06}},
+ {t:'ضربة قاتلة',d:'+12% فرصة ضربة حرجة (ضرر مضاعف)',f:()=>{game.upg.crit=(game.upg.crit||0)+.12}},
+ {t:'دوّامة سريعة',d:'الدوّامة بترجع أسرع بـ35%',f:()=>{game.upg.sc=(game.upg.sc||1)*.65}},
+ {t:'تفادي ذكي',d:'التفادي بيرجع أسرع بـ30%',f:()=>{game.upg.dc=(game.upg.dc||1)*.7}},
+ {t:'تجدد',d:'+1.5 صحة كل ثانية',f:()=>{game.upg.rg=(game.upg.rg||0)+1.5}},
+ {t:'ضربات أوسع',d:'+20% مدى السيف',f:()=>{game.upg.rad=(game.upg.rad||1)*1.2}}
+);
 function showUpgrades(){
   game.mode='upg';
   const pool=[...UPGS].sort(()=>Math.random()-.5).slice(0,3);
@@ -548,11 +582,24 @@ function showUpgrades(){
 
 // ---------- flow ----------
 function clearWorld(){for(const e of [...game.enemies])removeEnemy(e);for(const q of game.dmgs)q.d.remove();game.dmgs=[];if(game.player){scene.remove(game.player.group);scene.remove(game.player.shield)}for(const r of rings){scene.remove(r.m);scene.remove(r.f)}rings.length=0;game.spawnQueue=[];$('boss').style.display='none';$('bosslabel').style.display='none'}
+function souls(){return +localStorage.getItem('hs_souls')||0}
+function tlv(){try{return Object.assign({hp:0,dmg:0,spd:0},JSON.parse(localStorage.getItem('hs_tl')||'{}'))}catch(e){return{hp:0,dmg:0,spd:0}}}
+const TEMPLE=[{k:'hp',t:'جسد قوي',d:'+12 صحة قصوى لكل مستوى'},{k:'dmg',t:'نصل مسنون',d:'+6% ضرر لكل مستوى'},{k:'spd',t:'قدم خفيفة',d:'+3% سرعة لكل مستوى'}];
+function renderTemple(){
+  $('soulline').textContent='💀 أرواحك: '+souls();const box=$('tcards');box.innerHTML='';const L=tlv();
+  for(const it of TEMPLE){const lv=L[it.k],cost=50*(lv+1);const c=document.createElement('div');c.className='card';c.style.marginBottom='10px';
+    c.innerHTML=`${it.t} • مستوى ${lv}/6<small>${it.d}</small><small>${lv>=6?'ماكس':'السعر: '+cost+' 💀'}</small>`;
+    if(lv<6&&souls()>=cost){c.style.borderColor='#ffd84a';c.addEventListener('click',()=>{const L2=tlv();const c2=50*(L2[it.k]+1);if(souls()<c2||L2[it.k]>=6)return;localStorage.setItem('hs_souls',souls()-c2);L2[it.k]++;localStorage.setItem('hs_tl',JSON.stringify(L2));SFX.ui();renderTemple()})}else c.style.opacity=.55;
+    box.appendChild(c)}
+}
+$('bTemple').addEventListener('click',()=>{renderTemple();$('temple').style.display='flex'});
+$('bTBack').addEventListener('click',()=>{$('temple').style.display='none'});
 function startGame(){
   audioInit();music();
-  clearWorld();
+  clearWorld();for(const q of projs)scene.remove(q.m);projs.length=0;game.endless=false;game.totalWaves=10;game.combo=0;
   game.upg={dmg:1,hp:0,spd:1};game.kills=0;game.t0=performance.now();game.bossRef=null;game.paused=false;
   game.player=mkPlayer();game.player.shieldHits=0;game.player.comboT=0;
+  {const L=tlv();game.player.maxhp=100+12*L.hp;game.player.hp=game.player.maxhp;game.upg.dmg=1+.06*L.dmg;game.upg.spd=1+.03*L.spd}
   $('menu').style.display='none';$('over').style.display='none';$('upg').style.display='none';$('pause').style.display='none';$('hud').style.display='block';
   startWave(1);
 }
@@ -563,8 +610,10 @@ function endGame(win){
   const reached=win?game.totalWaves:game.wave;
   let best=0;try{best=+localStorage.getItem('hs_best')||0;if(win||reached>best){localStorage.setItem('hs_best',win?99:reached)}if(win)localStorage.setItem('hs_win','1')}catch(e){}
   $('otitle').textContent=win?'انتصرت!':'سقط الفارس';
-  $('otext').textContent=win?`هزمت ملك الهياكل! قتلت ${game.kills} هيكل في ${secs} ثانية.`:`وصلت للموجة ${reached} من ${game.totalWaves} وقتلت ${game.kills} هيكل. جرّب تاني وتفادى في الوقت المناسب.`;
-  $('bShare').style.display=win?'block':'none';
+  $('otext').textContent=win?`هزمت ملك الهياكل! قتلت ${game.kills} هيكل في ${secs} ثانية.`:`وصلت للموجة ${reached} من ${game.endless?'∞':game.totalWaves} وقتلت ${game.kills} هيكل. جرّب تاني وتفادى في الوقت المناسب.`;
+  $('bShare').style.display=win?'block':'none';$('bEndless').style.display=win&&!game.endless?'block':'none';
+  {const gain=game.kills*2+reached*8+(win?120:0);localStorage.setItem('hs_souls',souls()+gain);$('otext').textContent+=` +${gain} 💀 روح`;
+   if(game.endless){const b2=+localStorage.getItem('hs_end')||0;if(game.wave>b2)localStorage.setItem('hs_end',game.wave);$('otitle').textContent='♾ سقط الفارس';$('otext').textContent=`وصلت للموجة ${game.wave} في اللانهائي (أحسن: ${Math.max(b2,game.wave)}) وقتلت ${game.kills} هيكل. +${gain} 💀 روح`}}
   $('over').style.display='flex';win&&SFX.win();
   refreshBest();
 }
@@ -572,6 +621,7 @@ function refreshBest(){try{const b=+localStorage.getItem('hs_best')||0;$('best')
 refreshBest();
 $('bStart').addEventListener('click',()=>{startGame()});
 $('bRetry').addEventListener('click',()=>startGame());
+$('bEndless').addEventListener('click',()=>{audioInit();$('over').style.display='none';$('hud').style.display='block';game.endless=true;game.totalWaves=1e9;game.mode='between';game.waveDelay=.5;const p=game.player;p.hp=p.maxhp;SFX.ui()});
 $('bShare').addEventListener('click',()=>{const t='هزمت ملك الهياكل في لعبة معركة الهياكل 3D! جرّبها: '+location.href;if(navigator.share)navigator.share({text:t}).catch(()=>{});else navigator.clipboard&&navigator.clipboard.writeText(t)});
 function setPause(p){if(game.mode==='menu'||game.mode==='over')return;game.paused=p;$('pause').style.display=p?'flex':'none'}
 $('bPause').addEventListener('click',()=>setPause(true));
@@ -619,16 +669,17 @@ function loop(){
   if(p&&game.mode!=='menu'){
     updSpawns(dt);
     if(game.mode==='between'){game.waveDelay-=dt;input.atk=input.dodge=input.spec=false;if(game.waveDelay<=0){showUpgrades()}}
-    if(game.mode!=='upg'&&game.mode!=='over'){updatePlayer(dt);updateEnemies(dt)}
+    if(game.mode!=='upg'&&game.mode!=='over'){updatePlayer(dt);updateEnemies(dt);updProjs(dt)}
     checkWaveDone(dt);
     // hud
     $('hp').firstChild.style.width=Math.max(0,p.hp/p.maxhp*100)+'%';
     $('hplabel').textContent=`الفارس ${Math.ceil(p.hp)}/${p.maxhp}`+(p.shieldHits>0?' (درع سحري)':'');
-    $('kills').textContent=`قتلى: ${game.kills}`;
+    game.comboT=(game.comboT||0)-dt;if(game.comboT<=0)game.combo=0;
+    $('kills').textContent=`قتلى: ${game.kills}`+(game.combo>=3?`  🔥 x${game.combo}`:'');
     const dc=$('bDodge').lastElementChild,sc=$('bSpec').lastElementChild;dc.style.height=(p.dodgeCd/.9*100)+'%';sc.style.height=(p.specCd/6*100)+'%';
     if(game.bossRef){const b=game.bossRef;$('boss').firstChild.style.width=Math.max(0,b.hp/b.maxhp*100)+'%';if(b.dead){$('boss').style.display='none';$('bosslabel').style.display='none'}}
   }
-  updSparks(dt);updRings(dt);updDmgs(dt);
+  updSparks(dt);updRings(dt);updDmgs(dt);updEmbers(dt);
   // camera
   const tx=p?p.x*.85:0,tz=p?p.z*.85:0;
   camX+=(tx-camX)*Math.min(1,dt*6);camZ+=(tz-camZ)*Math.min(1,dt*6);
@@ -656,3 +707,4 @@ window.__dbg={game,input,THREE,scene,camera,startGame,spawnEnemy,hurtEnemy,KIND}
 </script>
 </body>
 </html>
+
