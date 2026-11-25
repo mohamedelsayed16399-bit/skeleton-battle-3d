@@ -77,7 +77,7 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
 <div class="screen" id="upg"><h1 style="font-size:30px">اختار تطوير</h1><div id="cards"></div></div>
 <div class="screen" id="over"><h1 id="otitle"></h1><p id="otext"></p><button class="btn" id="bRetry">العب تاني</button><button class="btn alt" id="bShare" style="display:none">شارك نتيجتك</button><button class="btn alt" id="bEndless" style="display:none">♾ كمّل لانهائي</button></div>
 <div class="screen" id="temple"><h1 style="font-size:30px">💀 معبد الأرواح</h1><p id="soulline"></p><div id="tcards"></div><button class="btn alt" id="bTBack">رجوع</button></div>
-<div class="screen" id="pause"><h1>إيقاف مؤقت</h1><button class="btn" id="bResume">كمّل</button><button class="btn alt" id="bQuit">القائمة</button></div>
+<div class="screen" id="pause"><h1>إيقاف مؤقت</h1><p id="pstat" style="font-size:16px"></p><button class="btn" id="bResume">كمّل</button><button class="btn alt" id="bQuit">القائمة</button></div>
 <div id="fps"></div>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -617,16 +617,16 @@ function endGame(win){
   $('over').style.display='flex';win&&SFX.win();
   refreshBest();
 }
-function refreshBest(){try{const b=+localStorage.getItem('hs_best')||0;$('best').textContent=localStorage.getItem('hs_win')?'هزمت الملك قبل كده':(b?`أبعد موجة وصلتلها: ${b}`:'')}catch(e){}}
+function refreshBest(){try{const b=+localStorage.getItem('hs_best')||0,en=+localStorage.getItem('hs_end')||0,so=souls();const a=[];a.push(localStorage.getItem('hs_win')?'هزمت الملك قبل كده 👑':(b?`أبعد موجة وصلتلها: ${b}`:''));if(en)a.push(`أطول لانهائي: موجة ${en}`);if(so)a.push(`أرواحك: ${so} 💀`);$('best').textContent=a.filter(Boolean).join(' · ')}catch(e){}}
 refreshBest();
 $('bStart').addEventListener('click',()=>{startGame()});
 $('bRetry').addEventListener('click',()=>startGame());
 $('bEndless').addEventListener('click',()=>{audioInit();$('over').style.display='none';$('hud').style.display='block';game.endless=true;game.totalWaves=1e9;game.mode='between';game.waveDelay=.5;const p=game.player;p.hp=p.maxhp;SFX.ui()});
 $('bShare').addEventListener('click',()=>{const t='هزمت ملك الهياكل في لعبة معركة الهياكل 3D! جرّبها: '+location.href;if(navigator.share)navigator.share({text:t}).catch(()=>{});else navigator.clipboard&&navigator.clipboard.writeText(t)});
-function setPause(p){if(game.mode==='menu'||game.mode==='over')return;game.paused=p;$('pause').style.display=p?'flex':'none'}
+function setPause(p){if(game.mode==='menu'||game.mode==='over')return;game.paused=p;if(p&&game.player){$('pstat').textContent=`الموجة ${game.wave}${game.endless?'':' من '+game.totalWaves} · قتلى ${game.kills} · صحة ${Math.ceil(game.player.hp)}/${game.player.maxhp}`}$('pause').style.display=p?'flex':'none'}
 $('bPause').addEventListener('click',()=>setPause(true));
 $('bResume').addEventListener('click',()=>setPause(false));
-$('bQuit').addEventListener('click',()=>{setPause(false);clearWorld();game.mode='menu';$('hud').style.display='none';$('menu').style.display='flex'});
+$('bQuit').addEventListener('click',()=>{setPause(false);clearWorld();refreshBest();game.mode='menu';$('hud').style.display='none';$('menu').style.display='flex'});
 $('bMute').addEventListener('click',()=>{audioInit();setMute(!muted)});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)setPause(true)});
 
@@ -707,4 +707,5 @@ window.__dbg={game,input,THREE,scene,camera,startGame,spawnEnemy,hurtEnemy,KIND}
 </script>
 </body>
 </html>
+
 
