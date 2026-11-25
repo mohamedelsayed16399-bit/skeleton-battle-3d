@@ -48,6 +48,13 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
 #fps{position:fixed;bottom:2px;left:4px;font-size:10px;opacity:.5;display:none}
 #flash{position:fixed;inset:0;background:radial-gradient(circle,transparent 40%,rgba(220,0,0,.55));opacity:0;pointer-events:none;transition:opacity .25s;z-index:1}
 #rot{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0d0716;z-index:9;font-size:20px;text-align:center;padding:30px}
+.aitem{display:flex;gap:10px;align-items:center;background:#ffffff10;border-radius:12px;padding:9px 12px;text-align:right;border:2px solid #ffffff14;width:100%;max-width:420px}
+.aitem .ic{font-size:22px}.aitem .tx{flex:1}.aitem .tx b{display:block;font-size:14px}.aitem .tx span{font-size:12px;opacity:.7}
+.aitem .pbar{height:6px;background:#ffffff1a;border-radius:4px;overflow:hidden;margin-top:4px}.aitem .pbar i{display:block;height:100%;background:#ffd84a}
+.aitem.done{border-color:#ffd84a}.aitem:not(.done) .ic{filter:grayscale(1);opacity:.5}
+#atoast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#ffd84a;color:#221a00;font-weight:800;padding:10px 20px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99;white-space:nowrap}
+#atoast.show{opacity:1}
+#achlist{display:flex;flex-direction:column;gap:8px;align-items:center;max-height:60vh;overflow-y:auto;width:100%}
 </style>
 </head>
 <body>
@@ -71,13 +78,16 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
   <p style="font-size:13px;opacity:.75">يسار: عصا الحركة · زر الضرب الأحمر (٣ ضربات متتالية) · الأزرق للتفادي (بيحميك لحظة) · البنفسجي ضربة دوّارة قوية<br>كيبورد: WASD أو الأسهم · J ضرب · K تفادي · L دوّامة</p>
   <button class="btn" id="bStart" disabled>جاري التحميل…</button>
   <button class="btn alt" id="bTemple">💀 معبد الأرواح</button>
+  <button class="btn alt" id="bAch">🏅 الإنجازات</button>
   <div id="best" style="font-size:14px;opacity:.85"></div>
   <div id="credit">مجسمات ثلاثية الأبعاد: Kay Lousberg (KayKit) - CC0 · المحرك: three.js (MIT) · الصوت مولّد بالكود</div>
 </div>
 <div class="screen" id="upg"><h1 style="font-size:30px">اختار تطوير</h1><div id="cards"></div></div>
 <div class="screen" id="over"><h1 id="otitle"></h1><p id="otext"></p><button class="btn" id="bRetry">العب تاني</button><button class="btn alt" id="bShare" style="display:none">شارك نتيجتك</button><button class="btn alt" id="bEndless" style="display:none">♾ كمّل لانهائي</button></div>
+<div class="screen" id="achv"><h1 style="font-size:30px">🏅 الإنجازات</h1><div id="achlist"></div><button class="btn alt" id="bABack">رجوع</button></div>
 <div class="screen" id="temple"><h1 style="font-size:30px">💀 معبد الأرواح</h1><p id="soulline"></p><div id="tcards"></div><button class="btn alt" id="bTBack">رجوع</button></div>
 <div class="screen" id="pause"><h1>إيقاف مؤقت</h1><p id="pstat" style="font-size:16px"></p><button class="btn" id="bResume">كمّل</button><button class="btn alt" id="bQuit">القائمة</button></div>
+<div id="atoast"></div>
 <div id="fps"></div>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -299,7 +309,7 @@ function hurtEnemy(e,dmg,kx,kz,crit){
     e.dead=true;e.state='dying';e.st=0;game.kills++;
     play(e,e.kind==='boss'?'Death_C_Skeletons':(Math.random()<.5?'Death_A':'Death_C_Skeletons'),{loop:false,fade:.05});
     SFX.die();burst(e.x,1,e.z,16,sparkMatR);burst(e.x,1.4,e.z,10,boneMat);
-    game.combo=(game.combo||0)+1;game.comboT=2.6;if(game.combo>0&&game.combo%5===0){const pp=game.player;if(pp&&!pp.dead)pp.hp=Math.min(pp.maxhp,pp.hp+4);banner('🔥 كومبو x'+game.combo,900);addRing(e.x,e.z,2.4,.35,0xffa030)}
+    game.combo=(game.combo||0)+1;game.comboT=2.6;if(game.combo>(HST.bestCombo||0)){HST.bestCombo=game.combo;saveHST()}if(game.combo>0&&game.combo%5===0){const pp=game.player;if(pp&&!pp.dead)pp.hp=Math.min(pp.maxhp,pp.hp+4);banner('🔥 كومبو x'+game.combo,900);addRing(e.x,e.z,2.4,.35,0xffa030)}
     if(e.kind==='boss'){game.shake=.8;game.hitstop=.25;}
   }
 }
@@ -583,6 +593,27 @@ function showUpgrades(){
 // ---------- flow ----------
 function clearWorld(){for(const e of [...game.enemies])removeEnemy(e);for(const q of game.dmgs)q.d.remove();game.dmgs=[];if(game.player){scene.remove(game.player.group);scene.remove(game.player.shield)}for(const r of rings){scene.remove(r.m);scene.remove(r.f)}rings.length=0;game.spawnQueue=[];$('boss').style.display='none';$('bosslabel').style.display='none'}
 function souls(){return +localStorage.getItem('hs_souls')||0}
+let HST={kills:0,runs:0,wins:0,souls:0,bestCombo:0};
+try{Object.assign(HST,JSON.parse(localStorage.getItem('hs_stats')||'{}'))}catch(e){}
+function saveHST(){try{localStorage.setItem('hs_stats',JSON.stringify(HST))}catch(e){}}
+let HSACH={};try{HSACH=JSON.parse(localStorage.getItem('hs_ach')||'{}')}catch(e){}
+const ACHS=[
+ {id:'k100',ic:'💀',t:'حطّام هياكل',d:'اقتل 100 هيكل إجمالي',p:()=>[HST.kills,100]},
+ {id:'k500',ic:'☠️',t:'مقبرة متحركة',d:'اقتل 500 هيكل إجمالي',p:()=>[HST.kills,500]},
+ {id:'k2000',ic:'🪦',t:'نهاية الجيش',d:'اقتل 2000 هيكل إجمالي',p:()=>[HST.kills,2000]},
+ {id:'w5',ic:'🛡',t:'نص الطريق',d:'اوصل للموجة 5',p:()=>[+localStorage.getItem('hs_best')||0,5]},
+ {id:'w10',ic:'⚔',t:'الموجة الأخيرة',d:'اوصل للموجة 10',p:()=>[+localStorage.getItem('hs_best')||0,10]},
+ {id:'win1',ic:'👑',t:'قاتل الملك',d:'اهزم ملك الهياكل',p:()=>[HST.wins,1]},
+ {id:'e10',ic:'♾',t:'اللانهائي 10',d:'اوصل للموجة 10 في الوضع اللانهائي',p:()=>[+localStorage.getItem('hs_end')||0,10]},
+ {id:'c15',ic:'🔥',t:'كومبو ×15',d:'اعمل كومبو ×15 في جولة',p:()=>[HST.bestCombo,15]},
+ {id:'s500',ic:'💰',t:'جامع الأرواح',d:'اجمع 500 روح إجمالي',p:()=>[HST.souls,500]},
+ {id:'s2000',ic:'🏦',t:'تاجر الأرواح',d:'اجمع 2000 روح إجمالي',p:()=>[HST.souls,2000]},
+ {id:'r10',ic:'🎮',t:'مُداوم',d:'العب 10 جولات',p:()=>[HST.runs,10]},
+ {id:'r25',ic:'🏰',t:'حارس المملكة',d:'العب 25 جولة',p:()=>[HST.runs,25]}];
+let atT=null;
+function atoast(m){const t=$('atoast');t.textContent=m;t.classList.add('show');clearTimeout(atT);atT=setTimeout(()=>t.classList.remove('show'),2600)}
+function checkAch(){let ch=false;for(const a of ACHS){if(HSACH[a.id])continue;const [v,need]=a.p();if(v>=need){HSACH[a.id]=1;ch=true;atoast('🏅 إنجاز جديد: '+a.t)}}if(ch){try{localStorage.setItem('hs_ach',JSON.stringify(HSACH))}catch(e){}}}
+function renderAch(){const L=$('achlist');L.innerHTML='';for(const a of ACHS){const [v,need]=a.p();const done=!!HSACH[a.id];const d=document.createElement('div');d.className='aitem'+(done?' done':'');d.innerHTML='<div class="ic">'+a.ic+'</div><div class="tx"><b>'+a.t+(done?' ✓':'')+'</b><span>'+a.d+'</span><div class="pbar"><i style="width:'+Math.min(100,v/need*100)+'%"></i></div></div>';L.appendChild(d)}}
 function tlv(){try{return Object.assign({hp:0,dmg:0,spd:0},JSON.parse(localStorage.getItem('hs_tl')||'{}'))}catch(e){return{hp:0,dmg:0,spd:0}}}
 const TEMPLE=[{k:'hp',t:'جسد قوي',d:'+12 صحة قصوى لكل مستوى'},{k:'dmg',t:'نصل مسنون',d:'+6% ضرر لكل مستوى'},{k:'spd',t:'قدم خفيفة',d:'+3% سرعة لكل مستوى'}];
 function renderTemple(){
@@ -593,6 +624,8 @@ function renderTemple(){
     box.appendChild(c)}
 }
 $('bTemple').addEventListener('click',()=>{renderTemple();$('temple').style.display='flex'});
+$('bAch').addEventListener('click',()=>{renderAch();$('achv').style.display='flex'});
+$('bABack').addEventListener('click',()=>{$('achv').style.display='none'});
 $('bTBack').addEventListener('click',()=>{$('temple').style.display='none'});
 function startGame(){
   audioInit();music();
@@ -612,7 +645,7 @@ function endGame(win){
   $('otitle').textContent=win?'انتصرت!':'سقط الفارس';
   $('otext').textContent=win?`هزمت ملك الهياكل! قتلت ${game.kills} هيكل في ${secs} ثانية.`:`وصلت للموجة ${reached} من ${game.endless?'∞':game.totalWaves} وقتلت ${game.kills} هيكل. جرّب تاني وتفادى في الوقت المناسب.`;
   $('bShare').style.display=win?'block':'none';$('bEndless').style.display=win&&!game.endless?'block':'none';
-  {const gain=game.kills*2+reached*8+(win?120:0);localStorage.setItem('hs_souls',souls()+gain);$('otext').textContent+=` +${gain} 💀 روح`;
+  {const gain=game.kills*2+reached*8+(win?120:0);localStorage.setItem('hs_souls',souls()+gain);HST.kills+=game.kills;HST.runs++;if(win)HST.wins++;HST.souls+=gain;saveHST();checkAch();$('otext').textContent+=` +${gain} 💀 روح`;
    if(game.endless){const b2=+localStorage.getItem('hs_end')||0;if(game.wave>b2)localStorage.setItem('hs_end',game.wave);$('otitle').textContent='♾ سقط الفارس';$('otext').textContent=`وصلت للموجة ${game.wave} في اللانهائي (أحسن: ${Math.max(b2,game.wave)}) وقتلت ${game.kills} هيكل. +${gain} 💀 روح`}}
   $('over').style.display='flex';win&&SFX.win();
   refreshBest();
@@ -703,9 +736,10 @@ function loop(){
   }catch(err){$('bStart').textContent='فشل التحميل - حدّث الصفحة';console.error(err)}
 })();
 loop();
-window.__dbg={game,input,THREE,scene,camera,startGame,spawnEnemy,hurtEnemy,KIND};
+window.__dbg={game,input,THREE,scene,camera,startGame,spawnEnemy,hurtEnemy,KIND,endGame,HST,HSACH,ACHS,checkAch};
 </script>
 </body>
 </html>
+
 
 
